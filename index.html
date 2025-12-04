@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factorio Blueprint Organizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        const FactorioBlueprintOrganizer = () => {
+          const [books, setBooks] = useState([
+            { id: 'book1', name: 'My Blueprints', blueprints: [] }
+          ]);
+          const [selectedBook, setSelectedBook] = useState('book1');
+          const [selectedBlueprint, setSelectedBlueprint] = useState(null);
+          const [zoom, setZoom] = useState(20);
+          const [pan, setPan] = useState({ x: 0, y: 0 });
+          const [isPanning, setIsPanning] = useState(false);
+          const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+          const canvasRef = useRef(null);
+
+          // Entity type colors for visualization
+          const entityColors = {
+            'assembling-machine': '#4A90E2',
+            'furnace': '#E67E22',
+            'inserter': '#F39C12',
+            'transport-belt': '#95A5A6',
+            'underground-belt': '#7F8C8D',
+            'splitter': '#34495E',
+            'electric-pole': '#E74C3C',
+            'pipe': '#3498DB',
+            'mining-drill': '#9B59B6',
+            'offshore-pump': '#1ABC9C',
+            'boiler': '#D35400',
+            'steam-engine': '#C0392B',
+            'solar-panel': '#F1C40F',
+            'accumulator': '#16A085',
+            'roboport': '#8E44AD',
+            'chest': '#E67E22',
+            'beacon': '#9B59B6',
+            'lab': '#3498DB',
+            'radar': '#E74C3C',
+            'wall': '#95A5A6',
+            'gate': '#7F8C8D',
+            'turret': '#C0392B',
+            'default': '#BDC3C7'
+          };
+
+          const decodeBlueprint = (bpString) => {
+            try {
+              // Remove version byte (first character)
+              const withoutVersion = bpString.substring(1);
+              
+              // Decode base64
+              const compressed = atob(withoutVersion);
+              
+              // Convert to Uint8Array
+              const compressedArray = new Uint8Array(compressed.length);
+              for (let i = 0; i < compressed.length; i++) {
+                compressedArray[i] = compressed.charCodeAt(i);
+              }
+              
+              // Decompress using pako
+              const decompressed = pako.inflate(compressedArray, { to: 'string' });
+              
+              // Parse JSON
+              return JSON.parse(decompressed);
+            } catch (error) {
+              console.error('Failed to decode blueprint:', error);
+              return null;
+            }
+          };
+
+          const handleImport = () => {
+            const bpString = prompt('Paste your blueprint string:');
+            if (!bpString) return;
+
+            const decoded = decodeBlueprint(bpString);
+            if (!decoded) {
+              alert('Failed to decode blueprint. Please check the string.');
+              return;
+            }
+
+            const bp = decoded.blueprint || decoded.blueprint_book;
+            if (!bp) {
+              alert('Invalid blueprint format.');
+              return;
+            }
+
+            const newBlueprint = {
+              id: Date.now().toString(),
+              name: bp.label || bp.name || 'Unnamed Blueprint',
+              data: decoded,
+              rawString: bpString
+            };
+
+            setBooks(books.map(book => 
+              book.id === selectedBook 
+                ? { ...book, blueprints: [...book.blueprints, newBlueprint] }
+                : book
+            ));
+          };
+
+          const handleCreateBook = () => {
+            const name = prompt('Book name:');
+            if (!name) return;
+
+            const newBook = {
+              id: Date.now().toString(),
+              name,
+              blueprints: []
+            };
+            setBooks([...books, newBook]);
+            setSelectedBook(newBook.id);
+          };
+
+          const handleDeleteBlueprint = (bpId) => {
+            if (!confirm('Delete this blueprint?')) return;
+            
+            setBooks(books.map(book =>
+              book.id === selectedBook
+                ? { ...book, blueprints: book.blueprints.filter(bp => bp.id !== bpId) }
+                : book
+            ));
+            if (selectedBlueprint?.id === bpId) {
+              setSelectedBlueprint(null);
+            }
+          };
+
+          const getEntityColor = (entityName) => {
+            for (const [key, color] of Object.entries(entityColors)) {
+              if (entityName.includes(key)) return color;
+            }
+            return entityColors.default;
+          };
+
+          const getEntitySize = (entityName) => {
+            // Most entities are 1x1, some are larger
+            if (entityName.includes('assembling-machine-3')) return 3;
+            if (entityName.includes('assembling-machine')) return 3;
+            if (entityName.includes('chemical-plant')) return 3;
+            if (entityName.includes('oil-refinery')) return 5;
+            if (entityName.includes('roboport')) return 4;
+            if (entityName.includes('beacon')) return 3;
+            if (entityName.includes('furnace')) return 2;
+            return 1;
+          };
+
+          useEffect(() => {
+            if (!selectedBlueprint) return;
+
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            // Clear canvas
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, width, height);
+
+            // Get blueprint data
+            const bp = selectedBlueprint.data.blueprint;
+            if (!bp || !bp.entities) return;
+
+            // Calculate bounds
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            bp.entities.forEach(entity => {
+              const size = getEntitySize(entity.name);
+              minX = Math.min(minX, entity.position.x - size/2);
+              minY = Math.min(minY, entity.position.y - size/2);
+              maxX = Math.max(maxX, entity.position.x + size/2);
+              maxY = Math.max(maxY, entity.position.y + size/2);
+            });
+
+            // Center the blueprint
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            // Draw grid
+            ctx.strokeStyle = '#2a2a2a';
+            ctx.lineWidth = 1;
+            for (let x = -50; x < 50; x++) {
+              const screenX = width/2 + (x - centerX) * zoom + pan.x;
+              ctx.beginPath();
+              ctx.moveTo(screenX, 0);
+              ctx.lineTo(screenX, height);
+              ctx.stroke();
+            }
+            for (let y = -50; y < 50; y++) {
+              const screenY = height/2 + (y - centerY) * zoom + pan.y;
+              ctx.beginPath();
+              ctx.moveTo(0, screenY);
+              ctx.lineTo(width, screenY);
+              ctx.stroke();
+            }
+
+            // Draw entities
+            bp.entities.forEach(entity => {
+              const size = getEntitySize(entity.name);
+              const x = width/2 + (entity.position.x - centerX) * zoom + pan.x;
+              const y = height/2 + (entity.position.y - centerY) * zoom + pan.y;
+              const pixelSize = size * zoom;
+
+              ctx.fillStyle = getEntityColor(entity.name);
+              ctx.fillRect(x - pixelSize/2, y - pixelSize/2, pixelSize, pixelSize);
+
+              // Draw border
+              ctx.strokeStyle = '#000';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(x - pixelSize/2, y - pixelSize/2, pixelSize, pixelSize);
+
+              // Draw direction indicator for entities with direction
+              if (entity.direction) {
+                ctx.fillStyle = '#fff';
+                const dirSize = Math.max(2, pixelSize * 0.2);
+                const dirOffset = pixelSize * 0.3;
+                
+                // Direction: 0=north, 2=east, 4=south, 6=west
+                const angle = (entity.direction || 0) * Math.PI / 4;
+                const dx = Math.sin(angle) * dirOffset;
+                const dy = -Math.cos(angle) * dirOffset;
+                
+                ctx.beginPath();
+                ctx.arc(x + dx, y + dy, dirSize, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            });
+
+            // Draw connections (belts, pipes, etc.)
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            bp.entities.forEach(entity => {
+              if (entity.neighbours) {
+                const x1 = width/2 + (entity.position.x - centerX) * zoom + pan.x;
+                const y1 = height/2 + (entity.position.y - centerY) * zoom + pan.y;
+                
+                entity.neighbours.forEach(neighbourId => {
+                  const neighbour = bp.entities.find(e => e.entity_number === neighbourId);
+                  if (neighbour) {
+                    const x2 = width/2 + (neighbour.position.x - centerX) * zoom + pan.x;
+                    const y2 = height/2 + (neighbour.position.y - centerY) * zoom + pan.y;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                  }
+                });
+              }
+            });
+
+          }, [selectedBlueprint, zoom, pan]);
+
+          const handleMouseDown = (e) => {
+            setIsPanning(true);
+            setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+          };
+
+          const handleMouseMove = (e) => {
+            if (!isPanning) return;
+            setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+          };
+
+          const handleMouseUp = () => {
+            setIsPanning(false);
+          };
+
+          const currentBook = books.find(b => b.id === selectedBook);
+
+          // SVG icons
+          const UploadIcon = () => (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+          );
+
+          const BookIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/>
+            </svg>
+          );
+
+          const PlusIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          );
+
+          const TrashIcon = () => (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          );
+
+          const ZoomInIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35M11 8v6M8 11h6"/>
+            </svg>
+          );
+
+          const ZoomOutIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35M8 11h6"/>
+            </svg>
+          );
+
+          const MoveIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/>
+              <polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/>
+              <line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>
+            </svg>
+          );
+
+          return (
+            <div className="w-full h-screen bg-gray-900 text-white flex">
+              {/* Sidebar */}
+              <div className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col">
+                {/* Book selector */}
+                <div className="p-4 border-b border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-bold flex items-center gap-2">
+                      <BookIcon />
+                      Blueprint Books
+                    </h2>
+                    <button
+                      onClick={handleCreateBook}
+                      className="p-1 hover:bg-gray-700 rounded"
+                      title="New Book"
+                    >
+                      <PlusIcon />
+                    </button>
+                  </div>
+                  <select
+                    value={selectedBook}
+                    onChange={(e) => setSelectedBook(e.target.value)}
+                    className="w-full bg-gray-700 p-2 rounded text-white"
+                  >
+                    {books.map(book => (
+                      <option key={book.id} value={book.id}>{book.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Blueprints list */}
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">Blueprints</h3>
+                    <button
+                      onClick={handleImport}
+                      className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
+                    >
+                      <UploadIcon />
+                      Import
+                    </button>
+                  </div>
+                  
+                  {currentBook.blueprints.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No blueprints yet. Import one to get started!</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {currentBook.blueprints.map(bp => (
+                        <div
+                          key={bp.id}
+                          className={`p-3 rounded cursor-pointer border-2 ${
+                            selectedBlueprint?.id === bp.id
+                              ? 'bg-blue-900 border-blue-500'
+                              : 'bg-gray-700 border-transparent hover:border-gray-600'
+                          }`}
+                          onClick={() => setSelectedBlueprint(bp)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{bp.name}</p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {bp.data.blueprint?.entities?.length || 0} entities
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteBlueprint(bp.id);
+                              }}
+                              className="p-1 hover:bg-red-600 rounded ml-2"
+                              title="Delete"
+                            >
+                              <TrashIcon />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Main canvas area */}
+              <div className="flex-1 flex flex-col">
+                {/* Toolbar */}
+                <div className="bg-gray-800 border-b border-gray-700 p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {selectedBlueprint ? (
+                      <>
+                        <h1 className="text-xl font-bold">{selectedBlueprint.name}</h1>
+                        <span className="text-sm text-gray-400">
+                          {selectedBlueprint.data.blueprint?.entities?.length || 0} entities
+                        </span>
+                      </>
+                    ) : (
+                      <h1 className="text-xl font-bold text-gray-500">Select a blueprint to view</h1>
+                    )}
+                  </div>
+                  
+                  {selectedBlueprint && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setZoom(Math.max(5, zoom - 5))}
+                        className="p-2 hover:bg-gray-700 rounded"
+                        title="Zoom Out"
+                      >
+                        <ZoomOutIcon />
+                      </button>
+                      <span className="text-sm px-2">{zoom}x</span>
+                      <button
+                        onClick={() => setZoom(Math.min(50, zoom + 5))}
+                        className="p-2 hover:bg-gray-700 rounded"
+                        title="Zoom In"
+                      >
+                        <ZoomInIcon />
+                      </button>
+                      <button
+                        onClick={() => setPan({ x: 0, y: 0 })}
+                        className="p-2 hover:bg-gray-700 rounded ml-2"
+                        title="Reset View"
+                      >
+                        <MoveIcon />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Canvas */}
+                <div className="flex-1 relative bg-gray-900">
+                  <canvas
+                    ref={canvasRef}
+                    width={1600}
+                    height={1000}
+                    className="w-full h-full cursor-move"
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                  />
+                  
+                  {!selectedBlueprint && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center text-gray-500">
+                        <BookIcon />
+                        <p className="text-lg mt-4">No blueprint selected</p>
+                        <p className="text-sm mt-2">Import a blueprint or select one from the sidebar</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        ReactDOM.render(<FactorioBlueprintOrganizer />, document.getElementById('root'));
+    </script>
+</body>
+</html>
