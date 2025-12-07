@@ -1,0 +1,322 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #1a1d21;
+    min-height: 100vh;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    background: #2d3138;
+    border-radius: 4px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05);
+    max-width: 1000px; /* Consistent width */
+    width: 100%;
+    padding: 40px;
+    border: 2px solid #44474e;
+}
+
+h1 {
+    color: #ff8c1a;
+    margin-bottom: 10px;
+    font-size: 28px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    font-weight: 700;
+}
+
+.subtitle {
+    color: #b8bcc4;
+    margin-bottom: 30px;
+    font-size: 14px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: #e8eaed;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* Specific label for JSON converter that needs space-between */
+#blueprintString-label, #jsonOutput-label {
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Additional styling for the converter */
+.label-action {
+    color: #ff8c1a;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+}
+
+textarea {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #44474e;
+    border-radius: 2px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    resize: vertical;
+    transition: border-color 0.3s;
+    background: #1e2126;
+    color: #e8eaed;
+    line-height: 1.4;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: #ff8c1a;
+    box-shadow: 0 0 0 2px rgba(255, 140, 26, 0.2);
+}
+
+/* Taller box for JSON */
+#jsonOutput {
+    height: 400px;
+    white-space: pre;
+    overflow-x: auto;
+}
+
+.input-group {
+    margin-bottom: 24px;
+}
+
+.button-group {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Override for planet swapper button group that needs left alignment */
+.options-section .button-group {
+    justify-content: flex-start;
+}
+
+.arrow-icon {
+    color: #6a6f7b;
+    font-size: 24px;
+}
+
+select, input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #44474e;
+    border-radius: 2px;
+    font-size: 14px;
+    background: #1e2126;
+    color: #e8eaed;
+    cursor: pointer;
+    transition: border-color 0.3s;
+}
+
+select:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: #ff8c1a;
+    box-shadow: 0 0 0 2px rgba(255, 140, 26, 0.2);
+}
+
+button {
+    flex: 1;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 2px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    border: 2px solid transparent;
+}
+
+/* Button variants */
+.btn-decode {
+    background: linear-gradient(180deg, #5aae6f 0%, #3d8a51 100%);
+    color: #e8eaed;
+    border-color: #5aae6f;
+}
+
+.btn-decode:hover {
+    background: linear-gradient(180deg, #5aae6f 0%, #4a9e5f 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 158, 95, 0.4);
+}
+
+.btn-encode {
+    background: linear-gradient(180deg, #ff9933 0%, #ff8c1a 100%);
+    color: #1a1d21;
+    border-color: #ffaa55;
+}
+
+.btn-encode:hover {
+    background: linear-gradient(180deg, #ffaa55 0%, #ff9933 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 140, 26, 0.4);
+}
+
+.btn-analyze {
+    background: #5a5f6b;
+    color: #e8eaed;
+    border-color: #6a6f7b;
+    width: 100%;
+    margin-bottom: 24px;
+}
+
+.btn-analyze:hover {
+    background: #6a6f7b;
+    border-color: #7a7f8b;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
+
+.btn-convert {
+    background: linear-gradient(180deg, #ff9933 0%, #ff8c1a 100%);
+    color: #1a1d21;
+    border-color: #ffaa55;
+}
+
+.btn-convert:hover {
+    background: linear-gradient(180deg, #ffaa55 0%, #ff9933 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 140, 26, 0.4);
+}
+
+.btn-convert:disabled {
+    background: #3a3d44;
+    color: #6a6f7b;
+    cursor: not-allowed;
+    transform: none;
+    border-color: #44474e;
+}
+
+.btn-copy {
+    background: linear-gradient(180deg, #4a9e5f 0%, #3d8a51 100%);
+    color: #e8eaed;
+    border-color: #5aae6f;
+}
+
+.btn-copy:hover {
+    background: linear-gradient(180deg, #5aae6f 0%, #4a9e5f 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 158, 95, 0.4);
+}
+
+.btn-copy:disabled {
+    background: #3a3d44;
+    color: #6a6f7b;
+    cursor: not-allowed;
+    transform: none;
+    border-color: #44474e;
+}
+
+.info-box {
+    background: #252931;
+    border-left: 4px solid #ff8c1a;
+    padding: 16px;
+    border-radius: 2px;
+    margin-bottom: 24px;
+    border: 1px solid #3a3d44;
+}
+
+.info-box h3 {
+    color: #ff8c1a;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.info-box p {
+    color: #b8bcc4;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.groups-box {
+    background: #252931;
+    border-left: 4px solid #ffaa55;
+    padding: 16px;
+    border-radius: 2px;
+    margin-bottom: 24px;
+    border: 1px solid #3a3d44;
+}
+
+.groups-box h3 {
+    color: #ffaa55;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.group-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: #1e2126;
+    border-radius: 2px;
+    border: 2px solid #3a3d44;
+    transition: all 0.2s;
+}
+
+.group-item:hover {
+    background: #252931;
+    border-color: #44474e;
+}
+
+.group-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-right: 12px;
+    cursor: pointer;
+    accent-color: #ff8c1a;
+}
+
+.group-item label {
+    margin: 0;
+    cursor: pointer;
+    flex: 1;
+    font-weight: 500;
+    color: #e8eaed;
+}
+
+.group-item .count {
+    color: #8a8f99;
+    font-size: 12px;
+    margin-left: 8px;
+    background: #3a3d44;
+    padding: 3px 8px;
+    border-radius: 2px;
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    border: 2px solid;
+}
+
+.alert-success {
+    background: #1f3d2f;
+    color: #7fd99f;
+    border-color: #3d8a51;
+}
+
+.alert-error {
+    background: #3d1f1f;
+    color: #ff7f7f;
+    border-color: #8a3d3d;
+}
+
+.hidden {
+    display: none;
+}
